@@ -136,7 +136,42 @@ class Parser:
         value = self.expr()
         return Assign(name, value)
 
-    
+    def print_statement(self):
+        self.consume('PRINT')
+        expr = self.expr()
+        return Print(expr)
+
+    def heist_statement(self):
+        self.consume('HEIST')
+        name = self.consume('ID')
+        plan = self.plan_statement()
+        return Heist(name, plan)
+
+    def plan_statement(self):
+        self.consume('PLAN')
+        plan = Plan()
+        while self.pos < len(self.tokens) and self.tokens[self.pos][0] != 'EXECUTE':
+            plan.steps.append(self.statement())
+        return plan
+
+    def execute_statement(self):
+        self.consume('EXECUTE')
+        name = self.consume('ID')
+        return Execute(name)
+
+    def statement(self):
+        token_type, _ = self.tokens[self.pos]
+        if token_type == 'ID':
+            return self.assignment()
+        elif token_type == 'PRINT':
+            return self.print_statement()
+        elif token_type == 'HEIST':
+            return self.heist_statement()
+        elif token_type == 'EXECUTE':
+            return self.execute_statement()
+        else:
+            raise RuntimeError(f'Unexpected statement: {token_type}')
+
     def parse(self):
         statements = []
         while self.pos < len(self.tokens):
@@ -213,4 +248,3 @@ class Interpreter:
         for node in nodes:
             results.append(self.visit(node))
         return results
-
