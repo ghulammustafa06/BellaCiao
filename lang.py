@@ -81,3 +81,53 @@ print_stmt = Print(expr=var)
 compound = Compound()
 compound.children.append(assignment)
 compound.children.append(print_stmt)
+
+# Parser
+class Parser:
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.pos = 0
+
+    def consume(self, expected_type):
+        token_type, token_value = self.tokens[self.pos]
+        if token_type == expected_type:
+            self.pos += 1
+            return token_value
+        else:
+            raise RuntimeError(f'Expected {expected_type} but got {token_type}')
+
+    def factor(self):
+        token_type, token_value = self.tokens[self.pos]
+        if token_type == 'NUMBER':
+            self.consume('NUMBER')
+            return Num(token_value)
+        elif token_type == 'ID':
+            self.consume('ID')
+            return Var(token_value)
+        else:
+            raise RuntimeError('Unexpected token: {}'.format(token_type))
+
+    def term(self):
+        node = self.factor()
+        while self.pos < len(self.tokens) and self.tokens[self.pos][0] == 'OP' and self.tokens[self.pos][1] in '*/':
+            op = self.consume('OP')
+            node = BinOp(left=node, op=op, right=self.factor())
+        return node
+
+    def expr(self):
+        node = self.term()
+        while self.pos < len(self.tokens) and self.tokens[self.pos][0] == 'OP' and self.tokens[self.pos][1] in '+-':
+            op = self.consume('OP')
+            node = BinOp(left=node, op=op, right=self.term())
+        return node
+
+    def assignment(self):
+        name = self.consume('ID')
+        self.consume('ASSIGN')
+        value = self.expr()
+        return Assign(name, value)
+
+    def parse(self):
+        node = self.assignment()
+        self.consume('END')
+        return node
