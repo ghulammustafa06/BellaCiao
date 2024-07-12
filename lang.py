@@ -131,3 +131,42 @@ class Parser:
         node = self.assignment()
         self.consume('END')
         return node
+
+# Interpreter
+class Interpreter:
+    def __init__(self):
+        self.env = {}
+
+    def visit(self, node):
+        method_name = 'visit_' + type(node).__name__
+        visitor = getattr(self, method_name)
+        return visitor(node)
+
+    def visit_BinOp(self, node):
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        if node.op == '+':
+            return left + right
+        elif node.op == '-':
+            return left - right
+        elif node.op == '*':
+            return left * right
+        elif node.op == '/':
+            return left / right
+
+    def visit_Num(self, node):
+        return node.value
+
+    def visit_Assign(self, node):
+        value = self.visit(node.value)
+        self.env[node.name] = value
+
+    def visit_Var(self, node):
+        if node.name in self.env:
+            return self.env[node.name]
+        else:
+            raise RuntimeError(f'Variable {node.name} not found')
+
+    def interpret(self, node):
+        self.visit(node)
+        return self.env
