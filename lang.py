@@ -2,14 +2,20 @@
 
 import re
 
-# ----------------------- Lexer ----------------------
-
+# Lexer
 token_specification = [
     ('NUMBER',   r'\d+(\.\d*)?'),
     ('ASSIGN',   r'='),
     ('END',      r';'),
-    ('ID',       r'[A-Za-z]+'),
+    ('ID',       r'[A-Za-z_][A-Za-z0-9_]*'),
     ('OP',       r'[+\-*/]'),
+    ('LPAREN',   r'\('),
+    ('RPAREN',   r'\)'),
+    ('PRINT',    r'print'),
+    ('HEIST',    r'heist'),
+    ('PLAN',     r'plan'),
+    ('EXECUTE',  r'execute'),
+    ('STRING',   r'"[^"]*"'),
     ('NEWLINE',  r'\n'),
     ('SKIP',     r'[ \t]+'),
     ('MISMATCH', r'.'),
@@ -24,63 +30,58 @@ def lex(code):
         value = mo.group()
         if kind == 'NUMBER':
             value = float(value) if '.' in value else int(value)
-        elif kind == 'SKIP' or kind == 'NEWLINE':
+        elif kind == 'STRING':
+            value = value[1:-1]  # Remove quotes
+        elif kind in ['SKIP', 'NEWLINE']:
             continue
         elif kind == 'MISMATCH':
             raise RuntimeError(f'{value} unexpected')
         tokens.append((kind, value))
     return tokens
 
-# Abstract Syntax Tree (AST) Nodes
+# AST Nodes
 class AST:
     pass
+
 class BinOp(AST):
     def __init__(self, left, op, right):
-        self.left = left  
-        self.op = op      
-        self.right = right 
+        self.left = left
+        self.op = op
+        self.right = right
 
 class Num(AST):
     def __init__(self, value):
-        self.value = value  #
+        self.value = value
+
+class String(AST):
+    def __init__(self, value):
+        self.value = value
 
 class Assign(AST):
     def __init__(self, name, value):
-        self.name = name    
-        self.value = value 
+        self.name = name
+        self.value = value
 
 class Var(AST):
     def __init__(self, name):
-        self.name = name  
-
-class UnaryOp(AST):
-    def __init__(self, op, operand):
-        self.op = op         
-        self.operand = operand 
-
-class Compound(AST):
-    def __init__(self):
-        self.children = []  
-
-class NoOp(AST):
-    pass
+        self.name = name
 
 class Print(AST):
     def __init__(self, expr):
-        self.expr = expr  
+        self.expr = expr
 
+class Heist(AST):
+    def __init__(self, name, plan):
+        self.name = name
+        self.plan = plan
 
-assignment = Assign(
-    name=Var(name='x'), 
-    value=BinOp(left=Num(value=7), op='+', right=Num(value=3))
-)
+class Plan(AST):
+    def __init__(self):
+        self.steps = []
 
-var = Var(name='x')
-
-print_stmt = Print(expr=var)
-compound = Compound()
-compound.children.append(assignment)
-compound.children.append(print_stmt)
+class Execute(AST):
+    def __init__(self, name):
+        self.name = name
 
 # Parser
 class Parser:
@@ -89,23 +90,31 @@ class Parser:
         self.pos = 0
 
     def consume(self, expected_type):
-        token_type, token_value = self.tokens[self.pos]
-        if token_type == expected_type:
-            self.pos += 1
-            return token_value
-        else:
-            raise RuntimeError(f'Expected {expected_type} but got {token_type}')
+        if self.pos < len(self.tokens):
+            token_type, token_value = self.tokens[self.pos]
+            if token_type == expected_type:
+                self.pos += 1
+                return token_value
+        raise RuntimeError(f'Expected {expected_type}')
 
     def factor(self):
         token_type, token_value = self.tokens[self.pos]
         if token_type == 'NUMBER':
             self.consume('NUMBER')
             return Num(token_value)
+        elif token_type == 'STRING':
+            self.consume('STRING')
+            return String(token_value)
         elif token_type == 'ID':
             self.consume('ID')
             return Var(token_value)
+        elif token_type == 'LPAREN':
+            self.consume('LPAREN')
+            node = self.expr()
+            self.consume('RPAREN')
+            return node
         else:
-            raise RuntimeError('Unexpected token: {}'.format(token_type))
+            raise RuntimeError(f'Unexpected token: {token_type}')
 
     def term(self):
         node = self.factor()
@@ -127,20 +136,28 @@ class Parser:
         value = self.expr()
         return Assign(name, value)
 
+    
     def parse(self):
-        node = self.assignment()
-        self.consume('END')
-        return node
+        statements = []
+        while self.pos < len(self.tokens):
+            statements.append(self.statement())
+            if self.pos < len(self.tokens):
+                self.consume('END')
+        return statements
 
 # Interpreter
 class Interpreter:
     def __init__(self):
         self.env = {}
+        self.heists = {}
 
     def visit(self, node):
         method_name = 'visit_' + type(node).__name__
-        visitor = getattr(self, method_name)
+        visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
+
+    def generic_visit(self, node):
+        raise RuntimeError(f'No visit_{type(node).__name__} method')
 
     def visit_BinOp(self, node):
         left = self.visit(node.left)
@@ -157,16 +174,43 @@ class Interpreter:
     def visit_Num(self, node):
         return node.value
 
+    def visit_String(self, node):
+        return node.value
+
     def visit_Assign(self, node):
         value = self.visit(node.value)
         self.env[node.name] = value
+        return value
 
     def visit_Var(self, node):
         if node.name in self.env:
             return self.env[node.name]
-        else:
-            raise RuntimeError(f'Variable {node.name} not found')
+        raise RuntimeError(f'Variable {node.name} not found')
 
-    def interpret(self, node):
-        self.visit(node)
-        return self.env
+    def visit_Print(self, node):
+        value = self.visit(node.expr)
+        print(value)
+        return value
+
+    def visit_Heist(self, node):
+        self.heists[node.name] = node.plan
+        return f"Heist '{node.name}' planned"
+
+    def visit_Plan(self, node):
+        results = []
+        for step in node.steps:
+            results.append(self.visit(step))
+        return results
+
+    def visit_Execute(self, node):
+        if node.name in self.heists:
+            plan = self.heists[node.name]
+            return self.visit(plan)
+        raise RuntimeError(f"Heist '{node.name}' not found")
+
+    def interpret(self, nodes):
+        results = []
+        for node in nodes:
+            results.append(self.visit(node))
+        return results
+
