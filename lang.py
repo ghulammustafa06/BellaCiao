@@ -24,6 +24,8 @@ token_specification = [
     ('COMPARE',  r'==|!=|<|>|<=|>='),
     ('LBRACE',   r'\{'),
     ('RBRACE',   r'\}'),
+    ('WHILE',    r'while'),
+
 
 ]
 
@@ -37,7 +39,7 @@ def lex(code):
         if kind == 'NUMBER':
             value = float(value) if '.' in value else int(value)
         elif kind == 'STRING':
-            value = value[1:-1]  # Remove quotes
+            value = value[1:-1]  
         elif kind in ['SKIP', 'NEWLINE']:
             continue
         elif kind == 'MISMATCH':
@@ -99,7 +101,12 @@ class Compare(AST):
     def __init__(self, left, op, right):
         self.left = left
         self.op = op
-        self.right = right        
+        self.right = right
+
+class While(AST):
+    def __init__(self, condition, body):
+        self.condition = condition
+        self.body = body
 
 # Parser
 class Parser:
@@ -205,6 +212,16 @@ class Parser:
         
         return If(condition, body, else_body)
 
+    def while_statement(self):
+        self.consume('WHILE')
+        condition = self.comparison()
+        self.consume('LBRACE')
+        body = []
+        while self.pos < len(self.tokens) and self.tokens[self.pos][0] != 'RBRACE':
+            body.append(self.statement())
+        self.consume('RBRACE')
+        return While(condition, body)
+
     def statement(self):
         token_type, _ = self.tokens[self.pos]
         if token_type == 'ID':
@@ -217,6 +234,8 @@ class Parser:
             return self.execute_statement()
         elif token_type == 'IF':
             return self.if_statement()
+        elif token_type == 'WHILE':
+            return self.while_statement()
         else:
             raise RuntimeError(f'Unexpected statement: {token_type}')
 
@@ -227,6 +246,7 @@ class Parser:
             if self.pos < len(self.tokens):
                 self.consume('END')
         return statements
+
 
 
 # Interpreter
@@ -254,6 +274,12 @@ class Interpreter:
             return left * right
         elif node.op == '/':
             return left / right
+        
+    def visit_While(self, node):
+        results = []
+        while self.visit(node.condition):
+            results.extend(self.interpret(node.body))
+        return results    
 
     def visit_Num(self, node):
         return node.value
@@ -292,9 +318,30 @@ class Interpreter:
             return self.visit(plan)
         raise RuntimeError(f"Heist '{node.name}' not found")
 
+    def visit_If(self, node):
+        if self.visit(node.condition):
+            return self.interpret(node.body)
+        elif node.else_body:
+            return self.interpret(node.else_body)
+
+    def visit_Compare(self, node):
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        if node.op == '==':
+            return left == right
+        elif node.op == '!=':
+            return left != right
+        elif node.op == '<':
+            return left < right
+        elif node.op == '>':
+            return left > right
+        elif node.op == '<=':
+            return left <= right
+        elif node.op == '>=':
+            return left >= right
+
     def interpret(self, nodes):
         results = []
         for node in nodes:
             results.append(self.visit(node))
         return results
-
