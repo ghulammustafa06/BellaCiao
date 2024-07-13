@@ -1,6 +1,7 @@
 # lang.py
 
 import re
+import random
 
 # Lexer
 token_specification = [
@@ -253,7 +254,7 @@ class Parser:
 class Interpreter:
     def __init__(self):
         self.env = {}
-        self.heists = {}
+        self.heists = {}        
 
     def visit(self, node):
         method_name = 'visit_' + type(node).__name__
@@ -345,3 +346,35 @@ class Interpreter:
         for node in nodes:
             results.append(self.visit(node))
         return results
+    
+def visit_Var(self, node):
+        if node.name in self.env:
+            return self.env[node.name]
+        elif node.name == 'bella_ciao':
+            return "Bella ciao, bella ciao, bella ciao ciao ciao!"
+        elif node.name == 'professor':
+            return "The mastermind behind the heist."
+        elif node.name == 'random_codename':
+            cities = ['Tokyo', 'Berlin', 'Nairobi', 'Rio', 'Denver', 'Moscow', 'Helsinki', 'Oslo']
+            return random.choice(cities)
+        elif node.name == 'vault_code':
+            return random.randint(1000, 9999)
+        elif node.name == 'police_response_time':
+            return random.randint(5, 30)
+        elif node.name == 'hostage_count':
+            return random.randint(20, 100)
+        elif node.name == 'security_guards':
+            return random.randint(5, 15)
+        elif node.name == 'money_printer_status':
+            return random.choice(["operational", "jammed", "low on ink"])
+        elif node.name == 'escape_route':
+            routes = ["sewers", "helicopter", "tunnel", "disguise as police"]
+            return random.choice(routes)
+        elif node.name == 'hacker_status':
+            return random.choice(["infiltrated", "blocked", "in progress"])
+        elif node.name == 'police_negotiator':
+            negotiators = ["Raquel Murillo", "Alicia Sierra", "Angel Rubio"]
+            return random.choice(negotiators)
+        elif node.name == 'time_remaining':
+            return random.randint(60, 240)
+        raise RuntimeError(f'Variable or function {node.name} not found')
