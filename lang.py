@@ -19,6 +19,12 @@ token_specification = [
     ('NEWLINE',  r'\n'),
     ('SKIP',     r'[ \t]+'),
     ('MISMATCH', r'.'),
+    ('IF',       r'if'),
+    ('ELSE',     r'else'),
+    ('COMPARE',  r'==|!=|<|>|<=|>='),
+    ('LBRACE',   r'\{'),
+    ('RBRACE',   r'\}'),
+
 ]
 
 token_regex = '|'.join('(?P<%s>%s)' % pair for pair in token_specification)
@@ -82,6 +88,18 @@ class Plan(AST):
 class Execute(AST):
     def __init__(self, name):
         self.name = name
+
+class If(AST):
+    def __init__(self, condition, body, else_body=None):
+        self.condition = condition
+        self.body = body
+        self.else_body = else_body
+
+class Compare(AST):
+    def __init__(self, left, op, right):
+        self.left = left
+        self.op = op
+        self.right = right        
 
 # Parser
 class Parser:
@@ -159,6 +177,34 @@ class Parser:
         name = self.consume('ID')
         return Execute(name)
 
+    def comparison(self):
+        node = self.expr()
+        if self.pos < len(self.tokens) and self.tokens[self.pos][0] == 'COMPARE':
+            op = self.consume('COMPARE')
+            right = self.expr()
+            node = Compare(node, op, right)
+        return node
+
+    def if_statement(self):
+        self.consume('IF')
+        condition = self.comparison()
+        self.consume('LBRACE')
+        body = []
+        while self.pos < len(self.tokens) and self.tokens[self.pos][0] != 'RBRACE':
+            body.append(self.statement())
+        self.consume('RBRACE')
+        
+        else_body = None
+        if self.pos < len(self.tokens) and self.tokens[self.pos][0] == 'ELSE':
+            self.consume('ELSE')
+            self.consume('LBRACE')
+            else_body = []
+            while self.pos < len(self.tokens) and self.tokens[self.pos][0] != 'RBRACE':
+                else_body.append(self.statement())
+            self.consume('RBRACE')
+        
+        return If(condition, body, else_body)
+
     def statement(self):
         token_type, _ = self.tokens[self.pos]
         if token_type == 'ID':
@@ -169,6 +215,8 @@ class Parser:
             return self.heist_statement()
         elif token_type == 'EXECUTE':
             return self.execute_statement()
+        elif token_type == 'IF':
+            return self.if_statement()
         else:
             raise RuntimeError(f'Unexpected statement: {token_type}')
 
@@ -179,6 +227,7 @@ class Parser:
             if self.pos < len(self.tokens):
                 self.consume('END')
         return statements
+
 
 # Interpreter
 class Interpreter:
@@ -248,3 +297,4 @@ class Interpreter:
         for node in nodes:
             results.append(self.visit(node))
         return results
+
