@@ -3,7 +3,7 @@
 import re
 import random
 
-# Lexer
+#----------------- Lexer -----------------------
 token_specification = [
     ('NUMBER',   r'\d+(\.\d*)?'),
     ('ASSIGN',   r'='),
@@ -48,7 +48,7 @@ def lex(code):
         tokens.append((kind, value))
     return tokens
 
-# AST Nodes
+# ------------------ AST Nodes -------------------
 class AST:
     pass
 
@@ -109,7 +109,7 @@ class While(AST):
         self.condition = condition
         self.body = body
 
-# Parser
+# --------------------- Parser -------------------
 class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
@@ -250,7 +250,7 @@ class Parser:
 
 
 
-# Interpreter
+# ------------------------- Interpreter ---------------------
 class Interpreter:
     def __init__(self):
         self.env = {}
